@@ -65,7 +65,7 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
             """
             
             response = client.models.generate_content(
-                model='gemini-1.5-flash',
+                model='gemini-3.5-pro',
                 contents=[uploaded_to_gemini, prompt],
                 config={'response_mime_type': 'application/json', 'response_schema': AnnexIVDocument}
             )
