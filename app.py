@@ -69,7 +69,7 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
                         time.sleep(5)
                         
                     response = client.models.generate_content(
-                        model='gemini-3.8-pro', # เปลี่ยนไปใช้รุ่น Pro ที่คิวน้อยกว่า
+                        model='gemini-3.8-flash', # เปลี่ยนไปใช้รุ่น Pro ที่คิวน้อยกว่า
                         contents=[uploaded_to_gemini, prompt],
                         config={'response_mime_type': 'application/json', 'response_schema': AnnexIVDocument}
                     )
