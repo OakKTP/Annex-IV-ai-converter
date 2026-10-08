@@ -1,4 +1,4 @@
-import streamlit as st
+AQ.Ab8RN6J66ZYoZjIEQAGI89CWHE1TEKZ-rLXQ0Dx-TTijMXw-nQimport streamlit as st
 import pandas as pd
 import json
 import io
@@ -70,7 +70,7 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
             
             # ใช้รุ่น 1.5-flash แบบส่ง Text ล้วน ทำงานได้ชัวร์ 100%
             response = client.models.generate_content(
-                model='gemini-1.5-flash', 
+                model='gemini-3.8-flash', 
                 contents=prompt,
                 config={'response_mime_type': 'application/json', 'response_schema': AnnexIVDocument}
             )
