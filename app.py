@@ -1,4 +1,4 @@
-AQ.Ab8RN6J66ZYoZjIEQAGI89CWHE1TEKZ-rLXQ0Dx-TTijMXw-nQimport streamlit as st
+import streamlit as st
 import pandas as pd
 import json
 import io
