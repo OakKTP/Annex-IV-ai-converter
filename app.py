@@ -67,7 +67,7 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
                 try:
                     if attempt > 0:
                         st.warning(f"⏳ คิวเซิร์ฟเวอร์เต็ม... ระบบกำลังพยายามส่งข้อมูลใหม่ครั้งที่ {attempt + 1}/{max_retries} (รอ 5 วินาที)")
-                        time.sleep(5)
+                        time.sleep(20)
                         
                     response = client.models.generate_content(
                         model='gemini-3.8-flash', # ใช้รุ่น Pro ที่แม่นยำและเสถียรที่สุด
