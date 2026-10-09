@@ -1,6 +1,5 @@
 streamlit
 pandas
 openpyxl
-google-genai
-pydantic
-PyPDF2
+PyMuPDF
+groq
