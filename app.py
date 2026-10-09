@@ -112,4 +112,41 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
                     "CC_Number": cc.get('catch_certificate_number', ''),
                     "Catch_Description_Code": cc.get('catch_description_code', ''),
                     "Catch_Processed_KG": cc.get('catch_processed_kg', 0.0),
-                    "Processed_
+                    "Processed_Product_KG": cc.get('processed_fishery_product_kg', 0.0),
+                    "Processing_Plant_Name": main_document_data.get('processing_plant_name', ''),
+                    "Processing_Plant_Approval": main_document_data.get('processing_plant_approval', ''),
+                    "Exporter_Name": main_document_data.get('exporter_name', ''),
+                    "Responsible_Person_Name": main_document_data.get('responsible_person_name', ''),
+                    "Responsible_Person_Date": main_document_data.get('responsible_person_date', ''),
+                    "Authority_Name": main_document_data.get('authority_name', ''),
+                    "Authority_Official_Name": main_document_data.get('authority_official_name', ''),
+                    "Authority_Date": main_document_data.get('authority_date', ''),
+                    "Transport_Country": main_document_data.get('transport_country', ''),
+                    "Transport_Port": main_document_data.get('transport_port', ''),
+                    "Transport_Vessel": main_document_data.get('transport_vessel', ''), 
+                    "Transport_Document_Ref": main_document_data.get('transport_document_ref', ''),
+                    "Container_Number": container_no,
+                    "Seal_Number": seal_no,
+                    "FilePath_For_Upload": f"C:\\TRACES_Docs\\{cc.get('catch_certificate_number', '')}.pdf"
+                }
+                rows.append(row)
+            
+            df = pd.DataFrame(rows)
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False)
+            excel_data = output.getvalue()
+            
+            original_filename = os.path.splitext(uploaded_file.name)[0]
+            export_filename = f"{original_filename}.xlsx"
+            
+            st.success("✅ สกัดข้อมูลสำเร็จเรียบร้อย!")
+            st.download_button(
+                label=f"📥 คลิกเพื่อดาวน์โหลดไฟล์: {export_filename}",
+                data=excel_data,
+                file_name=export_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาด: {e}")
