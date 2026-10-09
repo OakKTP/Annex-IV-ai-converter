@@ -3,85 +3,97 @@ import pandas as pd
 import json
 import io
 import os
-import PyPDF2
-from pydantic import BaseModel, Field
-from typing import List, Optional
-from google import genai
+import base64
+import fitz  # PyMuPDF สำหรับแปลง PDF เป็นรูป
+from groq import Groq
 
-# --- 1. กำหนดโครงสร้างข้อมูล (Schema) ---
-class CatchCertificateRow(BaseModel):
-    catch_certificate_number: str = Field(description="เลข CC เช่น CATCH.CC.FR.2026.0000763")
-    catch_description_code: str = Field(description="ดึงเฉพาะตัวเลขรหัส เช่น 0303.42")
-    catch_processed_kg: float = Field(description="น้ำหนัก Catch Processed(kg) เฉพาะตัวเลข")
-    processed_fishery_product_kg: float = Field(description="น้ำหนัก Processed Fishery Product(kg) เฉพาะตัวเลข")
-
-class TransportContainer(BaseModel):
-    container_number: str = Field(description="เลขตู้คอนเทนเนอร์ เช่น TGBU5323505")
-    seal_number: str = Field(description="เลขซีล เช่น ML-SC0045826")
-
-class AnnexIVDocument(BaseModel):
-    document_number: str = Field(description="เลข DOCUMENT NUMBER เช่น SFA/EU/IUU/REG/12567")
-    processed_product_cn_code: str = Field(description="รหัส CN Code เช่น 16041438")
-    catch_certificates: List[CatchCertificateRow]
-    processing_plant_name: str = Field(description="ชื่อโรงงาน เช่น INDIAN OCEAN TUNA LTD")
-    processing_plant_approval: str = Field(description="Approval number เช่น FC01")
-    exporter_name: str = Field(description="ชื่อผู้ส่งออก เช่น MW BRANDS SEYCHELLES LTD")
-    responsible_person_name: str = Field(description="ชื่อผู้รับผิดชอบโรงงาน เช่น Jamikara Techasaratoole")
-    responsible_person_date: str = Field(description="วันที่เซ็น เช่น 09 JUL 2026")
-    authority_name: str = Field(description="ชื่อหน่วยงานรัฐ เช่น SEYCHELLES FISHERIES AUTHORITY")
-    authority_official_name: str = Field(description="ชื่อเจ้าหน้าที่รัฐ เช่น Lisa Memei")
-    authority_date: str = Field(description="วันที่รัฐรับรอง เช่น 09.07.26")
-    transport_country: str = Field(description="Country of Exportation เช่น SEYCHELLES")
-    transport_port: str = Field(description="Port/Airport/Other Place of Departure เช่น VICTORIA")
-    transport_vessel: str = Field(description="ชื่อเรือขนส่ง หักเอาเฉพาะชื่อ ไม่เอาธง เช่น SPIL NITA")
-    transport_document_ref: str = Field(description="Flight Number/Airway Bill Number เช่น 272826747")
-    transport_containers: List[TransportContainer]
-
-# --- 2. ออกแบบหน้าตาเว็บไซต์ (UI) ---
+# --- 1. ออกแบบหน้าตาเว็บไซต์ (UI) ---
 st.set_page_config(page_title="TRACES AI Converter", page_icon="🐟")
-st.title("🐟 TRACES - Annex IV AI (Turbo Mode)")
-st.markdown("อัปโหลดไฟล์ PDF เพื่อดึงข้อมูลข้อความและแปลงเป็นไฟล์ Excel อย่างรวดเร็ว")
+st.title("🐟 TRACES - Annex IV AI (Groq Vision)")
+st.markdown("อัปโหลดไฟล์ PDF (สแกน) เพื่อแปลงเป็นไฟล์ Excel อย่างรวดเร็วด้วย Groq")
 
-api_key = st.text_input("🔑 ใส่ Gemini API Key ของคุณ:", type="password")
+api_key = st.text_input("🔑 ใส่ Groq API Key ของคุณ (ขึ้นต้นด้วย gsk_...):", type="password")
 uploaded_file = st.file_uploader("📂 เลือกไฟล์ PDF (Annex IV)", type=["pdf"])
 
 if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_file and api_key:
-    with st.spinner("⚡ กำลังแกะตัวหนังสือและส่งให้ AI... (โหมดรวดเร็ว)"):
+    with st.spinner("⚡ กำลังแปลงไฟล์และส่งให้ Groq AI อ่าน..."):
         try:
-            # --- สเต็ปใหม่: อ่านตัวหนังสือจาก PDF ด้วย Python โดยตรง ---
-            pdf_reader = PyPDF2.PdfReader(uploaded_file)
-            text_content = ""
-            for page in pdf_reader.pages:
-                text = page.extract_text()
-                if text:
-                    text_content += text + "\n"
+            # --- สเต็ป 1: แปลง PDF แต่ละหน้าเป็นรูปภาพ Base64 ---
+            pdf_bytes = uploaded_file.getvalue()
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             
-            # --- ส่งแค่ตัวหนังสือไปให้ Gemini (ไม่ส่งไฟล์ PDF แล้ว) ---
-            client = genai.Client(api_key=api_key)
+            base64_images = []
+            for page in doc:
+                pix = page.get_pixmap(dpi=150) # ความละเอียดกำลังดี ไม่หนักเกินไป
+                img_byte_arr = pix.tobytes("jpeg")
+                b64_img = base64.b64encode(img_byte_arr).decode('utf-8')
+                base64_images.append(b64_img)
             
-            prompt = f"""
+            # --- สเต็ป 2: เตรียมคำสั่งและส่งรูปให้ Groq ---
+            client = Groq(api_key=api_key)
+            
+            prompt_text = """
             คุณคือผู้เชี่ยวชาญด้านเอกสารศุลกากรยุโรป (EU TRACES)
-            อ่านข้อมูลข้อความต่อไปนี้ซึ่งถูกสกัดมาจากเอกสาร ANNEX IV (Processing Statement) และดึงข้อมูลออกมา
-            ข้อควรระวัง: สกัดตาราง Catch Certificate ให้ครบทุกแถว ตัวเลขน้ำหนักห้ามมีคอมม่า
-            
-            --- ข้อมูลเอกสาร ---
-            {text_content}
+            อ่านข้อมูลจากรูปภาพเอกสาร ANNEX IV (Processing Statement) และดึงข้อมูลออกมาในรูปแบบ JSON เท่านั้น
+            ห้ามพิมพ์ข้อความอธิบายใดๆ ทั้งสิ้น ให้ตอบกลับมาเป็น JSON โครงสร้างตามนี้เป๊ะๆ:
+            {
+              "document_number": "",
+              "processed_product_cn_code": "",
+              "catch_certificates": [
+                {
+                  "catch_certificate_number": "",
+                  "catch_description_code": "",
+                  "catch_processed_kg": 0.0,
+                  "processed_fishery_product_kg": 0.0
+                }
+              ],
+              "processing_plant_name": "",
+              "processing_plant_approval": "",
+              "exporter_name": "",
+              "responsible_person_name": "",
+              "responsible_person_date": "",
+              "authority_name": "",
+              "authority_official_name": "",
+              "authority_date": "",
+              "transport_country": "",
+              "transport_port": "",
+              "transport_vessel": "",
+              "transport_document_ref": "",
+              "transport_containers": [
+                {"container_number": "", "seal_number": ""}
+              ]
+            }
+            ข้อควรระวัง: สกัดตาราง Catch Certificate ให้ครบทุกแถว, ตัวเลขน้ำหนักให้ตัดเครื่องหมายคอมม่าออก
             """
             
-            # ใช้รุ่น 1.5-flash แบบส่ง Text ล้วน ทำงานได้ชัวร์ 100%
-            response = client.models.generate_content(
-                model='gemini-3.8-flash', 
-                contents=prompt,
-                config={'response_mime_type': 'application/json', 'response_schema': AnnexIVDocument}
+            # จัดรูปแบบข้อความและรูปภาพตามที่ Groq API ต้องการ
+            content_payload = [{"type": "text", "text": prompt_text}]
+            for b64 in base64_images:
+                content_payload.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+                })
+
+            response = client.chat.completions.create(
+                model="llama-3.2-90b-vision-preview", # โมเดลสายตาตัวท็อปของ Groq
+                messages=[{"role": "user", "content": content_payload}],
+                temperature=0.0
             )
             
-            # --- 3. แปลงข้อมูลเป็น Excel ---
-            data = json.loads(response.text)
+            # --- สเต็ป 3: ทำความสะอาดและแปลง JSON เป็น Excel ---
+            raw_response = response.choices[0].message.content
+            # ทำความสะอาดกรณี AI แถม Markdown มาให้
+            clean_json_str = raw_response.replace('```json', '').replace('```', '').strip()
+            
+            data = json.loads(clean_json_str)
             rows = []
+            
+            # ดึงตู้คอนเทนเนอร์แรก (ถ้ามี)
+            containers = data.get('transport_containers', [])
+            container_no = containers[0].get('container_number', '') if containers else ""
+            seal_no = containers[0].get('seal_number', '') if containers else ""
+            
             for cc in data.get('catch_certificates', []):
-                container_no = data.get('transport_containers')[0].get('container_number') if data.get('transport_containers') else ""
-                seal_no = data.get('transport_containers')[0].get('seal_number') if data.get('transport_containers') else ""
-                
                 row = {
                     "Document_Number": data.get('document_number'),
                     "Processed_Product_CN_Code": data.get('processed_product_cn_code'),
@@ -116,7 +128,7 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
             original_filename = os.path.splitext(uploaded_file.name)[0]
             export_filename = f"{original_filename}.xlsx"
             
-            st.success("✅ สกัดข้อมูลสำเร็จเรียบร้อย! (Turbo Mode)")
+            st.success("✅ สกัดข้อมูลสำเร็จเรียบร้อย!")
             st.download_button(
                 label=f"📥 คลิกเพื่อดาวน์โหลดไฟล์: {export_filename}",
                 data=excel_data,
@@ -126,3 +138,9 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
             
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาด: {e}")
+            # แสดงข้อมูลดิบที่ AI ตอบกลับมาเผื่อใช้ตรวจสอบเวลามีปัญหา
+            with st.expander("ดูข้อความตอบกลับดิบจาก AI"):
+                try:
+                    st.write(raw_response)
+                except:
+                    pass
