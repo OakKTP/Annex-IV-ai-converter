@@ -75,7 +75,7 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
                 })
 
             response = client.chat.completions.create(
-                model="llama-3.2-11b-vision-preview", # โมเดลสายตาตัวท็อปของ Groq
+                model="qwen/qwen3.8-27b", # โมเดลสายตาตัวท็อปของ Groq
                 messages=[{"role": "user", "content": content_payload}],
                 temperature=0.0
             )
