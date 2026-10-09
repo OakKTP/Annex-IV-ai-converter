@@ -31,7 +31,7 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
             # --- ส่งให้ AI อ่านทีละ 1 หน้า ---
             for page_num in range(total_pages):
                 page = doc.load_page(page_num)
-                pix = page.get_pixmap(dpi=150) # แปลงเป็นรูปภาพ
+                pix = page.get_pixmap(dpi=150) 
                 b64_img = base64.b64encode(pix.tobytes("jpeg")).decode('utf-8')
                 
                 prompt_text = """
@@ -53,10 +53,12 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
                 ]
 
+                # --- จุดแก้ปัญหาที่ 1: บังคับโควต้าไม่ให้เกิน 1,000 (ใส่ไว้แค่ 800) ---
                 response = client.chat.completions.create(
                     model="qwen/qwen3.8-27b", 
                     messages=[{"role": "user", "content": content_payload}],
-                    temperature=0.0
+                    temperature=0.0,
+                    max_tokens=800  
                 )
                 
                 raw_response = response.choices[0].message.content
@@ -65,7 +67,6 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
                 try:
                     data = json.loads(clean_json_str)
                     
-                    # เก็บข้อมูลเอกสารส่วนบน (เช็กว่าถ้ามีข้อมูลให้เอามาเติม)
                     for key in ["document_number", "processed_product_cn_code", "processing_plant_name", "processing_plant_approval", "exporter_name", "transport_vessel", "transport_document_ref"]:
                         if data.get(key) and not main_document_data.get(key):
                             main_document_data[key] = data[key]
@@ -74,18 +75,17 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
                         if data["transport_containers"][0].get("container_number"):
                             main_document_data["transport_containers"] = data["transport_containers"]
                             
-                    # เก็บตาราง CC (เอามาต่อท้ายเรื่อยๆ)
                     if data.get('catch_certificates'):
                         all_extracted_cc.extend(data['catch_certificates'])
                 except:
                     pass
                 
-                # อัปเดตแถบ Progress
                 progress_bar.progress((page_num + 1) / total_pages)
                 
-                # พักเซิร์ฟเวอร์ 2 วินาที ป้องกันการโดนเตะข้อหาสแปม API
+                # --- จุดแก้ปัญหาที่ 2: หน่วงเวลา 25 วินาทีต่อหน้า เพื่อให้โควต้าต่อนาทีถูกรีเซ็ต ---
                 if page_num < total_pages - 1:
-                    time.sleep(2)
+                    st.info(f"⏳ หน้าที่ {page_num+1} เสร็จแล้ว... ระบบกำลังรอ 25 วินาทีเพื่อรีเซ็ตโควต้าสำหรับหน้าถัดไป")
+                    time.sleep(25)
 
             # --- รวมข้อมูลทั้งหมดออกเป็น Excel ---
             rows = []
@@ -93,7 +93,6 @@ if st.button("🚀 เริ่มสกัดข้อมูล") and uploaded_
             container_no = containers[0].get('container_number', '') if containers else ""
             seal_no = containers[0].get('seal_number', '') if containers else ""
             
-            # กรองเฉพาะแถวที่ดึงเลข CC ได้จริงๆ
             valid_ccs = [cc for cc in all_extracted_cc if cc.get('catch_certificate_number')]
             
             for cc in valid_ccs:
